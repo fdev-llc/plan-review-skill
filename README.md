@@ -1,6 +1,8 @@
 # plan-review
 
-Automated Claude Code <-> Codex plan review loop. Sends your implementation plan to OpenAI Codex for independent structured review, incorporates feedback, revises the plan, and repeats until Codex approves.
+Automated Claude Code <-> Codex plan review loop, grounded in your real codebase. Sends your implementation plan to OpenAI Codex for an independent structured review -- Codex inspects the actual project files (read-only) to verify the plan's assumptions -- then incorporates the feedback, revises the plan, and repeats until Codex approves.
+
+A plan-text-only review can only judge a plan's internal logic. By giving Codex read access to the project, this loop also catches hallucinated file paths, wrong assumptions about existing code, missed reuse opportunities, and approaches that clash with the current architecture.
 
 ## Install
 
@@ -43,15 +45,18 @@ Or with options:
 |-----------|---------|-------------|
 | max_rounds | 5 | Safety cap for review rounds |
 | plan_path | auto-detect | Path to the plan file |
+| project_root | auto-detect | Absolute path of the project Codex inspects (working directory, or Git repo root) |
 | focus | general | One of: general, architecture, edge-cases, security, performance |
+| review_codebase | true | `true`: Codex inspects the real project files. `false`: plan-text-only review (greenfield plans, or a pure logic check) |
 
 ## How It Works
 
-1. Detects your current/latest plan file from `~/.claude/plans/`
-2. Sends it to Codex via MCP for structured review (completeness, correctness, risk, ordering, clarity)
-3. Codex responds with `VERDICT: APPROVED` or `VERDICT: NEEDS REVISION` with specific issues
-4. If revisions needed, Claude addresses the feedback and resubmits
-5. Loop continues until Codex approves or safety cap is reached
+1. Detects your current/latest plan file from `~/.claude/plans/` and the project root
+2. Sends the plan to Codex via MCP, with read-only access to the project so Codex can check it against the actual code
+3. Codex inspects the relevant files, then returns `VERDICT: APPROVED` or `VERDICT: NEEDS REVISION` with specific issues (codebase grounding, completeness, correctness, risk, ordering, clarity)
+4. If revisions are needed, Claude addresses the feedback and resubmits
+5. The review session persists across rounds, so Codex reuses its codebase exploration instead of repeating it
+6. The loop continues until Codex approves or the safety cap is reached
 
 ## License
 
