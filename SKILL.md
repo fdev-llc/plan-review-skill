@@ -40,11 +40,13 @@ Parse from the user's message. Use defaults if not specified:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| max_rounds | 5 | Safety cap -- stop even if not approved after this many rounds |
+| max_rounds | 10 | Safety cap -- stop even if not approved after this many rounds |
 | plan_path | auto-detect | Path to the plan file |
 | project_root | auto-detect | Absolute path of the project Codex inspects (Claude's working directory, or the Git repo root) |
 | focus | general | One of: general, architecture, edge-cases, security, performance |
 | review_codebase | true | `true`: Codex inspects the real project files. `false`: plan-text-only review (use for greenfield plans with no code yet, or a pure logic check) |
+| model | gpt-5.5 | Codex model used for the review |
+| reasoning_effort | xhigh | Codex reasoning effort -- one of: minimal, low, medium, high, xhigh (xhigh = "extra high", the deepest) |
 
 The loop is **convergence-based by default**: it runs until Codex signals approval, NOT for a fixed number of iterations. The `max_rounds` parameter is only a safety limit.
 
@@ -168,6 +170,8 @@ The Codex settings below are the same whether or not `review_codebase` is true -
   - `cwd`: `{project_root}` (absolute path) -- this is what lets Codex see the project
   - `sandbox`: `"read-only"` -- Codex inspects but never modifies the repo or the plan
   - `approval-policy`: `"never"` -- keeps the loop non-interactive; safe because a read-only sandbox cannot take destructive actions
+  - `model`: `{model}` -- the review model (default `gpt-5.5`)
+  - `config`: `{ "model_reasoning_effort": "{reasoning_effort}" }` -- sets reasoning depth (default `xhigh`); the `codex` tool has no dedicated effort parameter, so effort goes through `config`
 
   Then capture the session/thread id from the response (look for `threadId`, `conversationId`, or `thread_id` in the structured result).
 
@@ -175,7 +179,7 @@ The Codex settings below are the same whether or not `review_codebase` is true -
   - `threadId`: the id captured in round 1
   - `prompt`: the round-2+ review prompt
 
-  Reusing the thread means Codex keeps its `cwd`, sandbox, and codebase exploration from round 1. If no thread id was captured, call `mcp__codex-cli__codex` fresh instead (with the same `cwd`/`sandbox`/`approval-policy` as round 1) -- the round-2+ prompt already embeds the previous feedback and full revised plan.
+  Reusing the thread means Codex keeps its `cwd`, sandbox, model, reasoning effort, and codebase exploration from round 1. If no thread id was captured, call `mcp__codex-cli__codex` fresh instead (with the same `cwd`/`sandbox`/`approval-policy`/`model`/`config` as round 1) -- the round-2+ prompt already embeds the previous feedback and full revised plan.
 
 **Bash fallback:**
 
@@ -186,6 +190,8 @@ Write the round's prompt to `/tmp/plan-review-prompt.txt` first, then:
   cat /tmp/plan-review-prompt.txt | /opt/homebrew/bin/codex exec - \
     -C "{project_root}" \
     -s read-only \
+    -m {model} \
+    -c model_reasoning_effort="{reasoning_effort}" \
     --skip-git-repo-check \
     -o /tmp/codex-review-output.txt \
     2>/dev/null
@@ -194,6 +200,8 @@ Write the round's prompt to `/tmp/plan-review-prompt.txt` first, then:
 - **Rounds 2+** (resume round 1 so codebase context carries over):
   ```bash
   cat /tmp/plan-review-prompt.txt | /opt/homebrew/bin/codex exec resume --last - \
+    -m {model} \
+    -c model_reasoning_effort="{reasoning_effort}" \
     --skip-git-repo-check \
     -o /tmp/codex-review-output.txt \
     2>/dev/null
@@ -273,6 +281,7 @@ Present:
 - `sandbox: read-only` lets Codex read every file but modify nothing -- not the repo and not the plan. Claude stays the sole editor of the plan; Codex only critiques. This keeps Claude in control of revisions and prevents style/context loss.
 - Codex's codebase exploration is reused, not repeated. The review session persists across rounds (MCP `threadId`, or Bash `resume`), so rounds 2+ build on round 1's exploration and only re-inspect what the revised plan newly touches -- the project's code does not change between rounds, only the plan. A full re-exploration happens only on the degraded path where `resume` fails and a fresh `codex exec` is used.
 - Set `review_codebase=false` for greenfield plans (no code written yet) or when you want a pure logic review of the plan text alone.
+- The review runs Codex at `model` / `reasoning_effort` (default `gpt-5.5` at `xhigh` -- "extra high", the deepest reasoning). The skill pins these explicitly so review quality does not silently depend on the user's Codex `config.toml` defaults. Lower `reasoning_effort` (e.g. `high`) for faster, cheaper reviews, or if the Codex build or chosen model does not support `xhigh`.
 - The convergence approach is smarter than fixed iterations: simple plans may be approved in 1 round, complex plans may need 4-5.
 - For security-sensitive plans, use `focus=security` to prioritize threat modeling -- with codebase access Codex can inspect the real attack surface.
 - The `VERDICT:` line makes parsing deterministic -- no ambiguity about whether Codex approved or not.

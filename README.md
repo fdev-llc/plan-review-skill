@@ -43,11 +43,15 @@ Or with options:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| max_rounds | 5 | Safety cap for review rounds |
+| max_rounds | 10 | Safety cap — stops the loop even if Codex has not approved yet (not a fixed round count) |
 | plan_path | auto-detect | Path to the plan file |
 | project_root | auto-detect | Absolute path of the project Codex inspects (working directory, or Git repo root) |
 | focus | general | One of: general, architecture, edge-cases, security, performance |
 | review_codebase | true | `true`: Codex inspects the real project files. `false`: plan-text-only review (greenfield plans, or a pure logic check) |
+| model | gpt-5.5 | Codex model used for the review |
+| reasoning_effort | xhigh | Codex reasoning effort: minimal, low, medium, high, or xhigh (deepest) |
+
+The loop is **convergence-based**: it runs until Codex approves the plan, not for a fixed number of rounds. `max_rounds` is only a safety limit — simple plans may be approved in one round.
 
 ## How It Works
 
